@@ -56,6 +56,14 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Debug env vars
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          echo "ECR_REGISTRY=[$ECR_REGISTRY]"
+          echo "ECR_REPOSITORY=[$ECR_REPOSITORY]"
+          echo "IMAGE_TAG=[$IMAGE_TAG]"
+
       - name: Pull latest Docker image from ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
