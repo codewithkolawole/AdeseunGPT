@@ -17,22 +17,19 @@ jobs:
         run: |
           echo "=== Disk space before cleanup ==="
           df -h
-          
-          # Remove unnecessary packages
+
           sudo apt-get update
           sudo apt-get remove -y '^ghc-8.*' '^dotnet-.*' '^llvm-.*' 'php.*' mysql-server postgresql
           sudo apt-get autoremove -y
           sudo apt-get clean
-          
-          # Remove large directories
+
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
           sudo rm -rf /opt/hostedtoolcache/CodeQL
-          
-          # Clean Docker
+
           docker system prune -a -f --volumes
-          
+
           echo "=== Disk space after cleanup ==="
           df -h
 
@@ -57,10 +54,14 @@ jobs:
             echo "ERROR: ECR_REGISTRY is empty"
             exit 1
           fi
-          
+          if [ -z "$ECR_REPOSITORY" ]; then
+            echo "ERROR: ECR_REPOSITORY is empty. Check that the ECR_REPO secret exists."
+            exit 1
+          fi
+
           IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "Building image: $IMAGE_URI"
-          
+
           docker build --no-cache -t $IMAGE_URI .
           docker push $IMAGE_URI
 
@@ -82,14 +83,11 @@ jobs:
         run: |
           echo "=== Disk space before cleanup ==="
           df -h
-          
-          # Clean Docker
+
           docker system prune -a -f --volumes
           docker image prune -a -f
-          
-          # Remove old images
           docker rmi $(docker images -f "dangling=true" -q) || true
-          
+
           echo "=== Disk space after cleanup ==="
           df -h
 
@@ -110,6 +108,10 @@ jobs:
         run: |
           if [ -z "$ECR_REGISTRY" ]; then
             echo "ERROR: Failed to login to ECR. ECR_REGISTRY is empty"
+            exit 1
+          fi
+          if [ -z "$ECR_REPOSITORY" ]; then
+            echo "ERROR: ECR_REPOSITORY is empty. Check that the ECR_REPO secret exists in repo settings."
             exit 1
           fi
           echo "ECR_REGISTRY=[$ECR_REGISTRY]"
