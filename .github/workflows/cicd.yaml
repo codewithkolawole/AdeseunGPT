@@ -13,6 +13,29 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
+      - name: Free up disk space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h
+          
+          # Remove unnecessary packages
+          sudo apt-get update
+          sudo apt-get remove -y '^ghc-8.*' '^dotnet-.*' '^llvm-.*' 'php.*' mysql-server postgresql
+          sudo apt-get autoremove -y
+          sudo apt-get clean
+          
+          # Remove large directories
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          
+          # Clean Docker
+          docker system prune -a -f --volumes
+          
+          echo "=== Disk space after cleanup ==="
+          df -h
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -38,8 +61,14 @@ jobs:
           IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "Building image: $IMAGE_URI"
           
-          docker build -t $IMAGE_URI .
+          docker build --no-cache -t $IMAGE_URI .
           docker push $IMAGE_URI
+
+      - name: Clean up Docker after build
+        if: always()
+        run: |
+          docker system prune -f
+          docker image prune -a -f
 
   Continuous-Deployment:
     needs: Continuous-Integration
@@ -49,6 +78,21 @@ jobs:
       IMAGE_TAG: latest
 
     steps:
+      - name: Free up disk space on self-hosted runner
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h
+          
+          # Clean Docker
+          docker system prune -a -f --volumes
+          docker image prune -a -f
+          
+          # Remove old images
+          docker rmi $(docker images -f "dangling=true" -q) || true
+          
+          echo "=== Disk space after cleanup ==="
+          df -h
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -106,5 +150,8 @@ jobs:
           docker ps | grep agentic-chatbot || (echo "Container failed to start"; docker logs agentic-chatbot; exit 1)
 
       - name: Clean unused Docker images
+        if: always()
         run: |
-          docker image prune -f
+          docker system prune -f --volumes
+          docker image prune -a -f
+          docker volume prune -f
